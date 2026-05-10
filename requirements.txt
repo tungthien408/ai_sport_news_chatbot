@@ -1,0 +1,11 @@
+langchain
+langchain-community
+langchain-nvidia-ai-endpoints
+langchain-text-splitters
+langchain-postgres
+python-dotenv
+pydantic
+feedparser
+beautifulsoup4
+trafilatura
+json
