@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_USER: langchain
       POSTGRES_PASSWORD: langchain
-      POSTGRES_DB: langchain
+      POSTGRES_DB: vectordb 
     ports:
-      - "6024:5432"
+      - "9000:9000"
     volumes:
       - pgdata:/var/lib/postgresql/data   # giữ data khi restart
 
@@ -17,7 +17,7 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql+psycopg://langchain:langchain@db:6024/langchain
+      DATABASE_URL: postgresql+psycopg://langchain:langchain@db:9000/vectordb
 
 volumes:
   pgdata:
