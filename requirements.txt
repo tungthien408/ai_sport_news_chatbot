@@ -9,4 +9,4 @@ pydantic
 feedparser
 beautifulsoup4
 trafilatura
-json
+embedchain
