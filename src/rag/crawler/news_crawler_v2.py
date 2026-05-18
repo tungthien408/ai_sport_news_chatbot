@@ -5,6 +5,7 @@ import logging, json, os, re
 
 logger = logging.getLogger(__name__)
 
+
 def parse_date(date_str: str) -> datetime:
     """
     Parse chuỗi ngày tháng từ VNExpress sang đối tượng datetime.
@@ -38,34 +39,46 @@ def parse_date(date_str: str) -> datetime:
         logger.warning("parse_date: Lỗi khi parse ngày '%s': %s", date_str, e)
         return datetime.min
 
+
 """ Luồng hoạt động: RSSFeedParser -> NewsCrawler -> Storage """
+
 
 class RSSFeedParser:
     def __init__(self, feed_url: str) -> None:
         self.feed_url = feed_url
-        self.document: str = ''
+        self.document: str = ""
 
-    def get_feed_content(self) -> list[str]:
-        logger.info("[RSSFeedParser - get_feed_content()] Fetching RSS Feed: %s", self.feed_url)
+    def get_feed_content(self) -> None:
+        logger.info(
+            "[RSSFeedParser - get_feed_content()] Fetching RSS Feed: %s", self.feed_url
+        )
         self.document: str = fetch_url(self.feed_url)
-        
+
         if not self.document:
-            logger.error("[RSSFeedParser - get_feed_content()] Failed to fetch RSS feed: %s", self.feed_url)
+            logger.error(
+                "[RSSFeedParser - get_feed_content()] Failed to fetch RSS feed: %s",
+                self.feed_url,
+            )
             return []
-        
+
     def parse_urls(self) -> list[str]:
-        soup: BeautifulSoup = BeautifulSoup(self.document, 'xml')
-        rss_item: list[str] = soup.find_all('item')
+        if self.document is None:
+            self.get_feed_content()
+        soup: BeautifulSoup = BeautifulSoup(self.document, "xml")
+        rss_item: list[str] = soup.find_all("item")
         news_urls: list[str] = []
 
         for item in rss_item:
-            link_tag  = item.find('guid') or item.find('link')
+            link_tag = item.find("guid") or item.find("link")
             if link_tag and link_tag.text.startswith("http"):
                 news_urls.append(link_tag.text)
-        
-        logger.info("[RSSFeedParser - parse_urls()] Found %d article URLs", len(news_urls))
-        
-        return news_urls 
+
+        logger.info(
+            "[RSSFeedParser - parse_urls()] Found %d article URLs", len(news_urls)
+        )
+
+        return news_urls
+
 
 class Storage:
     """
@@ -85,11 +98,16 @@ class Storage:
             with open(self.output_url, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if not isinstance(data, list):
-                    logger.warning("[Storage] File %s sai format, tiến hành reset.", self.output_url)
+                    logger.warning(
+                        "[Storage] File %s sai format, tiến hành reset.",
+                        self.output_url,
+                    )
                     return []
                 return data
         except json.JSONDecodeError:
-            logger.error("[Storage] File %s bị lỗi JSON, tiến hành reset.", self.output_url)
+            logger.error(
+                "[Storage] File %s bị lỗi JSON, tiến hành reset.", self.output_url
+            )
             return []
 
     def _save_data(self, data: list[dict]) -> None:
@@ -115,24 +133,29 @@ class Storage:
         data.sort(key=lambda x: parse_date(x.get("date", "")), reverse=True)
 
         self._save_data(data)
-        logger.info("[Storage] Hoàn tất: thêm %d bài mới, tổng %d bài. File: %s",
-                    new_count, len(data), self.output_url)
+        logger.info(
+            "[Storage] Hoàn tất: thêm %d bài mới, tổng %d bài. File: %s",
+            new_count,
+            len(data),
+            self.output_url,
+        )
+
 
 class NewsCrawler:
-    """ Dựa vào các cái link URL xuất hiện trong feed RSS, tiến hành crawl dữ liệu bài báo """
+    """Dựa vào các cái link URL xuất hiện trong feed RSS, tiến hành crawl dữ liệu bài báo"""
+
     def __init__(self, output_url: str, news_urls: list[str]) -> None:
         self.news_urls: list[str] = news_urls
         self.output_url: str = output_url
         self.news_data: list[dict] = []
-    
+
     def extract_metadata(self, document: str) -> tuple[str, str]:
         soup: BeautifulSoup = BeautifulSoup(document, "html.parser")
         title: str = soup.title.text if soup.title else ""
-        date_tag = soup.find('span', class_='date')
+        date_tag = soup.find("span", class_="date")
         date = date_tag.text if date_tag else ""
         return title, date
-    
-    
+
     def content_extractor(self, news_url: str) -> None:
         document: str = fetch_url(news_url)
 
@@ -143,28 +166,26 @@ class NewsCrawler:
         text: str = extract(document)
         title, date = self.extract_metadata(document)
 
-        self.news_data.append({
-            "title": title,
-            "date": date,
-            "content": text,
-            "url": news_url
-        })
+        self.news_data.append(
+            {"title": title, "date": date, "content": text, "url": news_url}
+        )
 
     def news_content_collection(self) -> list[dict]:
         if self.news_urls is None:
             print(f"There are no working url news")
-            return None
+            return []
 
         for url in self.news_urls:
             self.content_extractor(url)
 
-        return self.news_data 
+        return self.news_data
+
 
 def operation(url: str, output_url: str):
     rss_feed_parser: RSSFeedParser = RSSFeedParser(feed_url=url)
     rss_feed_parser.get_feed_content()
     news_urls: list[str] = rss_feed_parser.parse_urls()
-    
+
     crawler: NewsCrawler = NewsCrawler(output_url=output_url, news_urls=news_urls)
     news_data: list[dict] = crawler.news_content_collection()
 
