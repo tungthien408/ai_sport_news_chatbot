@@ -25,6 +25,9 @@ class VectorStore:
         self.vector_store.add_documents(documents)
         logger.info("Đã lưu %i chunks vào PGVector.", len(documents))
         return len(documents)
-    
-    def query(self):
-        ...
+
+    def query(self, question: str, k: int = 4) -> list[Document]:
+        """Query vector store, trả về top-k documents liên quan nhất."""
+        docs = self.vector_store.similarity_search(question, k=k)
+        logger.info("Query '%s': tìm được %d docs.", question[:50], len(docs))
+        return docs
