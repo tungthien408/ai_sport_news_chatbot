@@ -6,7 +6,7 @@ import os, logging
 
 logger = logging.getLogger(__name__)
 
-COLLECTION_NAME = "news_articles"  # tên "bảng logic" trong PGVector
+COLLECTION_NAME = "news_articles"
 
 class VectorStore:
     def __init__(self):
@@ -20,9 +20,11 @@ class VectorStore:
             use_jsonb=True,
         )
     
-    def insert(self, documents: list[Document]):
+    def insert(self, documents: list[Document]) -> int:
+        """Insert documents vào vector store và trả về số lượng documents đã insert."""
         self.vector_store.add_documents(documents)
-        logger.info("Đã lưu %i chunks vào PGVector.", len(documents))    
+        logger.info("Đã lưu %i chunks vào PGVector.", len(documents))
+        return len(documents)
     
     def query(self):
         ...

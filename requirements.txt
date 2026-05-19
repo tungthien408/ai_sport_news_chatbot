@@ -4,6 +4,7 @@ langchain-community
 langchain-nvidia-ai-endpoints
 langchain-text-splitters
 langchain-postgres
+langchain-core
 langgraph
 docstring-parser
 markdown
