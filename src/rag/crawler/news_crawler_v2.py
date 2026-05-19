@@ -1,9 +1,39 @@
-from trafilatura import fetch_url, extract
-from bs4 import BeautifulSoup
+import logging
+import json
+import os
+import re
 from datetime import datetime
-import logging, json, os, re
+
+import requests
+from bs4 import BeautifulSoup
+from trafilatura import extract
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_FETCH_TIMEOUT = 30
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def safe_fetch_url(url: str, timeout: int = DEFAULT_FETCH_TIMEOUT) -> str | None:
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": USER_AGENT},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "safe_fetch_url: Failed to fetch %s within %s seconds: %s",
+            url,
+            timeout,
+            exc,
+        )
+        return None
 
 
 def parse_date(date_str: str) -> datetime:
@@ -52,14 +82,15 @@ class RSSFeedParser:
         logger.info(
             "[RSSFeedParser - get_feed_content()] Fetching RSS Feed: %s", self.feed_url
         )
-        self.document: str = fetch_url(self.feed_url)
+        self.document = safe_fetch_url(self.feed_url, timeout=DEFAULT_FETCH_TIMEOUT)
 
         if not self.document:
             logger.error(
                 "[RSSFeedParser - get_feed_content()] Failed to fetch RSS feed: %s",
                 self.feed_url,
             )
-            return []
+            self.document = None
+            return
 
     def parse_urls(self) -> list[str]:
         if self.document is None:
@@ -93,6 +124,9 @@ class Storage:
     def _load_existing_data(self) -> list[dict]:
         """Đọc dữ liệu hiện có từ file JSON. Trả về list rỗng nếu file chưa tồn tại."""
         if not os.path.exists(self.output_url):
+            logger.error(
+                "[Storage] File %s không tồn tại, sẽ tạo mới.", self.output_url
+            )
             return []
         try:
             with open(self.output_url, "r", encoding="utf-8") as f:
@@ -156,27 +190,47 @@ class NewsCrawler:
         date = date_tag.text if date_tag else ""
         return title, date
 
-    def content_extractor(self, news_url: str) -> None:
-        document: str = fetch_url(news_url)
+    def content_extractor(self, news_url: str, timeout: int = DEFAULT_FETCH_TIMEOUT) -> bool:
+        document = safe_fetch_url(news_url, timeout=timeout)
 
         if document is None:
-            print("Nothing inside the document")
-            return None
+            logger.warning(
+                "content_extractor: Failed to fetch content from %s", news_url
+            )
+            return False
 
-        text: str = extract(document)
+        text = extract(document)
+        if not text:
+            logger.warning(
+                "content_extractor: No extracted text from %s", news_url
+            )
+            return False
+
         title, date = self.extract_metadata(document)
-
         self.news_data.append(
             {"title": title, "date": date, "content": text, "url": news_url}
         )
+        return True
 
     def news_content_collection(self) -> list[dict]:
         if self.news_urls is None:
-            print(f"There are no working url news")
+            logger.warning("news_content_collection: news_urls is None")
             return []
 
+        success_count = 0
+        fail_count = 0
         for url in self.news_urls:
-            self.content_extractor(url)
+            if self.content_extractor(url, timeout=DEFAULT_FETCH_TIMEOUT):
+                success_count += 1
+            else:
+                fail_count += 1
+
+        logger.info(
+            "news_content_collection: %d succeeded, %d failed from %d URLs",
+            success_count,
+            fail_count,
+            len(self.news_urls),
+        )
 
         return self.news_data
 
