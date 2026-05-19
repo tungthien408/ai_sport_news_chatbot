@@ -245,3 +245,5 @@ def operation(url: str, output_url: str):
 
     storage: Storage = Storage(output_url=output_url, news_data=news_data)
     storage.operate_function()
+
+# operation("https://vnexpress.net/rss/the-thao.rss", "logs/raw_output.json")
