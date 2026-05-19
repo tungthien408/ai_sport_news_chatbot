@@ -4,6 +4,9 @@ An LLM-powered chatbot that answers user queries about sports news by crawling, 
 
 **Current Status:** Data pipeline in development (crawling → cleaning → chunking → vector DB insertion)
 
+<img width="1031" height="281" alt="image" src="https://github.com/user-attachments/assets/91fcb34c-237a-49df-850a-a70427df724a" />
+
+
 ---
 
 ## Prerequisites
