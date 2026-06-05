@@ -11,6 +11,8 @@ markdown
 qrcode
 tavily-python>=0.7.12
 textstat
+typing
+typing-extensions
 
 # === Web Framework + API ===
 fastapi

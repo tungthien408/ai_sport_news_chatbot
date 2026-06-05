@@ -2,6 +2,8 @@ import logging
 import json
 import os
 import re
+import time
+import random
 from datetime import datetime
 
 import requests
@@ -190,7 +192,9 @@ class NewsCrawler:
         date = date_tag.text if date_tag else ""
         return title, date
 
-    def content_extractor(self, news_url: str, timeout: int = DEFAULT_FETCH_TIMEOUT) -> bool:
+    def content_extractor(
+        self, news_url: str, timeout: int = DEFAULT_FETCH_TIMEOUT
+    ) -> bool:
         document = safe_fetch_url(news_url, timeout=timeout)
 
         if document is None:
@@ -200,10 +204,8 @@ class NewsCrawler:
             return False
 
         text = extract(document)
-        if not text:
-            logger.warning(
-                "content_extractor: No extracted text from %s", news_url
-            )
+        if not text or not text.strip():
+            logger.warning("content_extractor: No extracted text from %s", news_url)
             return False
 
         title, date = self.extract_metadata(document)
@@ -224,6 +226,7 @@ class NewsCrawler:
                 success_count += 1
             else:
                 fail_count += 1
+            time.sleep(random.uniform(2, 5))  # Delay 2-5s ngẫu nhiên giữa các request
 
         logger.info(
             "news_content_collection: %d succeeded, %d failed from %d URLs",
@@ -245,5 +248,6 @@ def operation(url: str, output_url: str):
 
     storage: Storage = Storage(output_url=output_url, news_data=news_data)
     storage.operate_function()
+
 
 # operation("https://vnexpress.net/rss/the-thao.rss", "logs/raw_output.json")

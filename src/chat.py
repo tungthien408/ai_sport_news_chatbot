@@ -7,6 +7,7 @@ from dotenv import load_dotenv, find_dotenv
 from langchain.agents import create_agent
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, ChatNVIDIA
 from util.tools import build_agent_tools
+from langchain_core.messages import HumanMessage, AIMessage
 
 SYSTEM_PROMPT = """Xin chào — bạn là một trợ lý cập nhật tin tức thể thao (chủ yếu bóng đá). Trả lời ngắn gọn, chính xác, và chỉ dựa trên dữ liệu xác thực. Không được bịa đặt hay suy diễn.
 
@@ -61,20 +62,26 @@ def main():
 
     Path("logs").mkdir(parents=True, exist_ok=True)
 
+    message_history = []
+
     while True:
         question = input("\n> ").strip()
         if question.lower() in {"exit", "quit"}:
             break
 
         # Input đúng format của CompiledStateGraph
-        inputs = {
-            "messages": [{"role": "user", "content": question}]
-        }
-
+        inputs = {"messages": message_history + [{"role": "user", "content": question}]}
         answer = agent.invoke(inputs)
+        message_history.extend(answer["messages"])
+
+        filtered_messages = [
+            msg
+            for msg in answer["messages"]
+            if hasattr(msg, "content") and msg.content and msg.content.strip()
+        ]
 
         # Lấy nội dung message cuối (AIMessage)
-        final_message = answer["messages"][-1]
+        final_message = filtered_messages[-1]
         response_text = (
             final_message.content
             if hasattr(final_message, "content")
@@ -104,10 +111,11 @@ def main():
                 lf.write("---\n")
         except Exception as e:
             print("Failed to write log:", e)
-        
+
         print("\n--- Answer ---")
         print(response_text)
 
 
 if __name__ == "__main__":
     main()
+
