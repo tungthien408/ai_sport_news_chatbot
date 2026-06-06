@@ -12,4 +12,5 @@ class GraphState(TypedDict):
     recency_status: Literal['RECENT', 'OLD', 'NOT_FOUND']
     crawl_history: list[str]
     crawl_count: int
+    final_answer: str
     user_feedback: str | None

@@ -1,7 +1,7 @@
-from crawler import news_crawler_v2
-from news_pipeline.cleaner import TextCleaner
-from news_pipeline.chunker import Chunker
-from news_pipeline.vector_store import VectorStore
+from rag.crawler import news_crawler_v2
+from rag.news_pipeline.cleaner import TextCleaner
+from rag.news_pipeline.chunker import Chunker
+from rag.news_pipeline.vector_store import VectorStore
 from langchain_core.documents import Document
 import json, logging
 
@@ -43,4 +43,4 @@ def rag_update_news(
         return 0
 
 
-rag_update_news()
+# rag_update_news()
