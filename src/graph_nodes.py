@@ -22,7 +22,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from graph_state import GraphState
-from util.tools import crawl_news_feed, current_time, retrieve_context
+from util.tools import current_time, retrieve_context
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,11 @@ _llm = ChatNVIDIA(
 
 GENERATE_SYSTEM = """Bạn là trợ lý tin tức thể thao. Trả lời ngắn gọn, chính xác, chỉ dựa trên context được cung cấp.
 Không được bịa đặt hay suy diễn. Luôn kèm citation: tiêu đề bài + URL + ngày.
-Nếu context không đủ, nói thẳng không có đủ thông tin."""
+Nếu context không đủ, nói thẳng không có đủ thông tin.
+Luôn luôn phản hồi với người dùng bằng chính ngôn ngữ mà họ dùng để hỏi bạn.
+Hãy giữ nguyên tất cả các ngôn từ thể hiện sự không chắc chắn và tính điều kiện từ nguồn tài liệu chính xác như cách chúng được viết (ví dụ: 'nếu', 'được báo cáo là', 'được kỳ vọng là', 'có thể'). Tuyệt đối không bao giờ trình bày các sự thật có điều kiện như thể chúng là những điều chắc chắn.
+Hãy tổng hợp thông tin từ TẤT CẢ các tài liệu được cung cấp. Nếu có nhiều tài liệu cùng giải quyết một câu hỏi, hãy kết hợp chúng lại thành một câu trả lời toàn diện.
+"""
 
 # URLs crawl theo thứ tự mặc định
 DEFAULT_CRAWL_URLS = [
@@ -73,7 +77,8 @@ def process_input(state: GraphState) -> dict:
 def retrieve_initial(state: GraphState) -> dict:
     """Query vector DB và populate docs_found."""
     question = state["current_question"]
-    result_str = retrieve_context(question)
+    hours = state["time_preference_hours"]
+    result_str = retrieve_context(question, hours_ago=hours)
     docs = _parse_retrieve_result(result_str)
 
     logger.info("[retrieve_initial] found %d docs", len(docs))
@@ -118,73 +123,74 @@ def check_recency(state: GraphState) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 # Node 4: decide_crawl
 # ──────────────────────────────────────────────────────────────────────────────
-def decide_crawl(state: GraphState) -> dict:
-    """
-    Chọn URL tiếp theo để crawl.
-    Thứ tự: user-provided URL (nếu có trong câu hỏi) → VnExpress → BBC.
-    Nếu đã crawl hết hoặc đủ 2 lần → next_crawl_url = None (signal để stop).
-    """
-    crawl_history: list[str] = state.get("crawl_history", [])
-    question = state["current_question"]
-    crawl_count: int = state.get("crawl_count", 0)
+# def decide_crawl(state: GraphState) -> dict:
+#     """
+#     Chọn URL tiếp theo để crawl.
+#     Thứ tự: user-provided URL (nếu có trong câu hỏi) → VnExpress → BBC.
+#     Nếu đã crawl hết hoặc đủ 2 lần → next_crawl_url = None (signal để stop).
+#     """
+#     crawl_history: list[str] = state.get("crawl_history", [])
+#     question = state["current_question"]
+#     crawl_count: int = state.get("crawl_count", 0)
 
-    if crawl_count >= 2:
-        logger.info("[decide_crawl] đã crawl %d lần, dừng.", crawl_count)
-        return {"next_crawl_url": None}
+#     if crawl_count >= 2:
+#         logger.info("[decide_crawl] đã crawl %d lần, dừng.", crawl_count)
+#         return {"next_crawl_url": None}
 
-    # Kiểm tra user có cung cấp URL RSS không
-    user_url = _extract_rss_url_from_question(question)
-    if user_url and user_url not in crawl_history:
-        logger.info("[decide_crawl] dùng user URL: %s", user_url)
-        return {"next_crawl_url": user_url}
+#     # Kiểm tra user có cung cấp URL RSS không
+#     user_url = _extract_rss_url_from_question(question)
+#     if user_url and user_url not in crawl_history:
+#         logger.info("[decide_crawl] dùng user URL: %s", user_url)
+#         return {"next_crawl_url": user_url}
 
-    # Dùng thứ tự mặc định
-    for url in DEFAULT_CRAWL_URLS:
-        if url not in crawl_history:
-            logger.info("[decide_crawl] next default URL: %s", url)
-            return {"next_crawl_url": url}
+#     # Dùng thứ tự mặc định
+#     for url in DEFAULT_CRAWL_URLS:
+#         if url not in crawl_history:
+#             logger.info("[decide_crawl] next default URL: %s", url)
+#             return {"next_crawl_url": url}
 
-    logger.info("[decide_crawl] không còn URL nào để crawl")
-    return {"next_crawl_url": None}
+#     logger.info("[decide_crawl] không còn URL nào để crawl")
+#     return {"next_crawl_url": None}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Node 5: crawl_and_process
 # ──────────────────────────────────────────────────────────────────────────────
-def crawl_and_process(state: GraphState) -> dict:
-    """Thực hiện crawl URL đã được chọn, cập nhật lịch sử."""
-    url: str | None = state.get("next_crawl_url")
+# def crawl_and_process(state: GraphState) -> dict:
+#     """Thực hiện crawl URL đã được chọn, cập nhật lịch sử."""
+#     url: str | None = state.get("next_crawl_url")
 
-    if not url:
-        logger.warning("[crawl_and_process] không có URL để crawl")
-        return {}
+#     if not url:
+#         logger.warning("[crawl_and_process] không có URL để crawl")
+#         return {}
 
-    crawl_history: list[str] = list(state.get("crawl_history", []))
-    crawl_count: int = state.get("crawl_count", 0)
+#     crawl_history: list[str] = list(state.get("crawl_history", []))
+#     crawl_count: int = state.get("crawl_count", 0)
 
-    logger.info("[crawl_and_process] crawling %s", url)
-    result = crawl_news_feed(url)
-    logger.info("[crawl_and_process] result: %s", result)
+#     logger.info("[crawl_and_process] crawling %s", url)
+#     result = crawl_news_feed(url)
+#     logger.info("[crawl_and_process] result: %s", result)
 
-    crawl_history.append(url)
+#     crawl_history.append(url)
 
-    return {
-        "crawl_history": crawl_history,
-        "crawl_count": crawl_count + 1,
-    }
+#     return {
+#         "crawl_history": crawl_history,
+#         "crawl_count": crawl_count + 1,
+#     }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Node 6: retrieve_after_crawl
 # ──────────────────────────────────────────────────────────────────────────────
-def retrieve_after_crawl(state: GraphState) -> dict:
-    """Re-query vector DB sau khi crawl xong."""
-    question = state["current_question"]
-    result_str = retrieve_context(question)
-    docs = _parse_retrieve_result(result_str)
+# def retrieve_after_crawl(state: GraphState) -> dict:
+#     """Re-query vector DB sau khi crawl xong."""
+#     question = state["current_question"]
+#     hours = state["time_preference_hours"]
+#     result_str = retrieve_context(question, hours_ago=hours)
+#     docs = _parse_retrieve_result(result_str)
 
-    logger.info("[retrieve_after_crawl] found %d docs after crawl", len(docs))
-    return {"docs_found": docs}
+#     logger.info("[retrieve_after_crawl] found %d docs after crawl", len(docs))
+#     return {"docs_found": docs}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -205,14 +211,14 @@ def generate_answer(state: GraphState) -> dict:
 
     # ── Build context string ───────────────────────────────────────────────────
     if not docs:
-        if crawl_count >= 2:
-            answer = (
-                "Không có thông tin cập nhật từ các nguồn hợp lệ trong khung thời gian yêu cầu.\n"
-                f"Đã thử crawl: {', '.join(crawl_history)}\n"
-                "Vui lòng cung cấp nguồn RSS cụ thể hoặc mở rộng khung thời gian."
-            )
-        else:
-            answer = "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+    #     if crawl_count >= 2:
+    #         answer = (
+    #             "Không có thông tin cập nhật từ các nguồn hợp lệ trong khung thời gian yêu cầu.\n"
+    #             f"Đã thử crawl: {', '.join(crawl_history)}\n"
+    #             "Vui lòng cung cấp nguồn RSS cụ thể hoặc mở rộng khung thời gian."
+    #         )
+    #     else:
+        answer = "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
 
         return {
             "final_answer": answer,
@@ -278,24 +284,24 @@ def route_after_recency_check(state: GraphState) -> str:
     if status in ("RECENT", "OLD"):
         return "generate_answer"
 
-    # NOT_FOUND
-    if crawl_count < 2:
-        return "decide_crawl"
+    # # NOT_FOUND
+    # if crawl_count < 2:
+    #     return "decide_crawl"
 
     # Đã crawl 2 lần vẫn NOT_FOUND
     return "generate_answer"
 
 
-def route_after_decide_crawl(state: GraphState) -> str:
-    """
-    Sau decide_crawl:
-    - Có URL → crawl_and_process
-    - Không có URL (đã hết / limit) → generate_answer
-    """
-    next_url = state.get("next_crawl_url")
-    if next_url:
-        return "crawl_and_process"
-    return "generate_answer"
+# def route_after_decide_crawl(state: GraphState) -> str:
+#     """
+#     Sau decide_crawl:
+#     - Có URL → crawl_and_process
+#     - Không có URL (đã hết / limit) → generate_answer
+#     """
+#     next_url = state.get("next_crawl_url")
+#     if next_url:
+#         return "crawl_and_process"
+#     return "generate_answer"
 
 
 # ──────────────────────────────────────────────────────────────────────────────

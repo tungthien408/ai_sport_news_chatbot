@@ -14,13 +14,9 @@ from langgraph.graph import END, START, StateGraph
 
 from graph_nodes import (
     check_recency,
-    crawl_and_process,
-    decide_crawl,
     generate_answer,
     process_input,
-    retrieve_after_crawl,
     retrieve_initial,
-    route_after_decide_crawl,
     route_after_recency_check,
 )
 from graph_state import GraphState
@@ -33,9 +29,6 @@ def build_graph():
     builder.add_node("process_input",        process_input)
     builder.add_node("retrieve_initial",     retrieve_initial)
     builder.add_node("check_recency",        check_recency)
-    builder.add_node("decide_crawl",         decide_crawl)
-    builder.add_node("crawl_and_process",    crawl_and_process)
-    builder.add_node("retrieve_after_crawl", retrieve_after_crawl)
     builder.add_node("generate_answer",      generate_answer)
 
     # ── Edges tuyến tính ──────────────────────────────────────────────────────
@@ -45,32 +38,14 @@ def build_graph():
 
     # ── Conditional: sau check_recency ────────────────────────────────────────
     # RECENT / OLD     → generate_answer
-    # NOT_FOUND + slot → decide_crawl
     # NOT_FOUND + full → generate_answer
     builder.add_conditional_edges(
         "check_recency",
         route_after_recency_check,
         {
             "generate_answer": "generate_answer",
-            "decide_crawl":    "decide_crawl",
         },
     )
-
-    # ── Conditional: sau decide_crawl ─────────────────────────────────────────
-    # Có URL   → crawl_and_process
-    # Không URL → generate_answer
-    builder.add_conditional_edges(
-        "decide_crawl",
-        route_after_decide_crawl,
-        {
-            "crawl_and_process": "crawl_and_process",
-            "generate_answer":   "generate_answer",
-        },
-    )
-
-    # ── Sau crawl: retrieve lại → check_recency lại (loop tối đa 2 lần) ──────
-    builder.add_edge("crawl_and_process",    "retrieve_after_crawl")
-    builder.add_edge("retrieve_after_crawl", "check_recency")
 
     # ── End ───────────────────────────────────────────────────────────────────
     builder.add_edge("generate_answer", END)

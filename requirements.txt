@@ -1,18 +1,10 @@
 # === Agent + LLM tools ===
-langchain
-langchain-community
 langchain-nvidia-ai-endpoints
 langchain-text-splitters
 langchain-postgres
 langchain-core
 langgraph
-docstring-parser
-markdown
-qrcode
-tavily-python>=0.7.12
-textstat
-typing
-typing-extensions
+apscheduler
 
 # === Web Framework + API ===
 fastapi
@@ -23,26 +15,16 @@ requests
 sqlalchemy
 uvicorn
 
-# === notebook experience ===
-ipywidgets
-jupyter_server
-nbclassic
-notebook
-
 # === Data analysis / Display ===
-duckdb
 matplotlib
 pandas
 seaborn
 tabulate
-tinydb
 
 # === Machine learning / NLP ===
 jinja2
 psycopg2-binary
 scikit-learn
-Wikipedia
 feedparser
 beautifulsoup4
 trafilatura
-embedchain

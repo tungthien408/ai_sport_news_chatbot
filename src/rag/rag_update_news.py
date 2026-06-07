@@ -42,5 +42,3 @@ def rag_update_news(
         logger.exception("rag_update_news: VectorStore.insert failed: %s", e)
         return 0
 
-
-# rag_update_news()

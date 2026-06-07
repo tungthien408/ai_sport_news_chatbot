@@ -86,12 +86,21 @@ class VectorStore:
         - Nếu không có bài nào trong khung thời gian, trả về bài mới nhất có
           liên quan và gắn flag 'recency_warning' vào metadata.
         """
-        docs = self.vector_store.similarity_search(question, k=k)
+        results = self.vector_store.similarity_search_with_score(question, k=k)
+        filtered: list[Document] = []
+
+        for doc, score in results:
+            if score >= 0.5:
+                doc.metadata["similarity_score"] = score
+                filtered.append(doc)
+        if not filtered:
+            logger.info("Query '%s': không tìm thấy doc nào có score >= 0.6.", question[:50])
+            return []
 
         # Lọc unique theo URL
         seen_urls = set()
         unique_docs: list[Document] = []
-        for doc in docs:
+        for doc in filtered:
             url = doc.metadata.get("url")
             if url and url not in seen_urls:
                 seen_urls.add(url)

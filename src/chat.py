@@ -11,6 +11,7 @@ Thay đổi so với version cũ:
 """
 
 import datetime
+# import timezone_aware
 import json
 import logging
 import time
@@ -98,7 +99,7 @@ def _write_log(question: str, result: dict, elapsed: float) -> None:
         return str(obj)
 
     log_entry = {
-        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
         "question": question,
         "elapsed_seconds": round(elapsed, 3),
         "recency_status": result.get("recency_status"),
