@@ -5,6 +5,7 @@ langchain-postgres
 langchain-core
 langgraph
 apscheduler
+wikipedia
 
 # === Web Framework + API ===
 fastapi

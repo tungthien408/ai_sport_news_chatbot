@@ -1,62 +1,87 @@
 """
 graph.py
 ========
-Wire tất cả nodes và conditional edges thành một CompiledStateGraph.
+Wire all nodes and conditional edges into a CompiledStateGraph.
 
-Dùng:
-    from graph import build_graph
-    graph = build_graph()
+Uses GraphNodeManager for OOP-based node registration.
+
+Usage:
+    from graph import get_graph
+    graph = get_graph()
     result = graph.invoke({"current_question": "...", "messages": []})
     print(result["final_answer"])
 """
 
 from langgraph.graph import END, START, StateGraph
 
-from graph_nodes import (
-    check_recency,
-    generate_answer,
-    process_input,
-    retrieve_initial,
-    route_after_recency_check,
-)
+from graph_nodes import GraphNodeManager
 from graph_state import GraphState
 
 
 def build_graph():
+    """Build and compile the LangGraph workflow.
+
+    Flow:
+        START → process_input → classify_question
+            ├─ sports_news  → retrieve_initial → check_recency
+            │                                     ├─ RECENT/OLD  → generate_answer → END
+            │                                     └─ NOT_FOUND   → wikipedia_search → generate_answer → END
+            ├─ sports_wiki  → wikipedia_search → generate_answer → END
+            └─ off_topic    → generate_answer (polite decline) → END
+    """
+    manager = GraphNodeManager()
     builder = StateGraph(GraphState)
 
-    # ── Đăng ký nodes ─────────────────────────────────────────────────────────
-    builder.add_node("process_input",        process_input)
-    builder.add_node("retrieve_initial",     retrieve_initial)
-    builder.add_node("check_recency",        check_recency)
-    builder.add_node("generate_answer",      generate_answer)
+    # ── Register nodes ────────────────────────────────────────────────────────
+    builder.add_node("process_input",     manager.process_input)
+    builder.add_node("classify_question", manager.classify_question)
+    builder.add_node("retrieve_initial",  manager.retrieve_initial)
+    builder.add_node("check_recency",     manager.check_recency)
+    builder.add_node("wikipedia_search",  manager.wikipedia_search)
+    builder.add_node("generate_answer",   manager.generate_answer)
 
-    # ── Edges tuyến tính ──────────────────────────────────────────────────────
-    builder.add_edge(START,                "process_input")
-    builder.add_edge("process_input",      "retrieve_initial")
-    builder.add_edge("retrieve_initial",   "check_recency")
+    # ── Linear edges ─────────────────────────────────────────────────────────
+    builder.add_edge(START,              "process_input")
+    builder.add_edge("process_input",    "classify_question")
+    builder.add_edge("retrieve_initial", "check_recency")
+    builder.add_edge("wikipedia_search", "generate_answer")
+    builder.add_edge("generate_answer",  END)
 
-    # ── Conditional: sau check_recency ────────────────────────────────────────
-    # RECENT / OLD     → generate_answer
-    # NOT_FOUND + full → generate_answer
+    # ── Conditional: after classify_question ──────────────────────────────────
+    # sports_news  → retrieve_initial
+    # sports_wiki  → wikipedia_search
+    # off_topic    → generate_answer (polite decline)
     builder.add_conditional_edges(
-        "check_recency",
-        route_after_recency_check,
+        "classify_question",
+        manager.route_after_classify,
         {
-            "generate_answer": "generate_answer",
+            "retrieve_initial": "retrieve_initial",
+            "wikipedia_search": "wikipedia_search",
+            "generate_answer":  "generate_answer",
         },
     )
 
-    # ── End ───────────────────────────────────────────────────────────────────
-    builder.add_edge("generate_answer", END)
+    # ── Conditional: after check_recency ──────────────────────────────────────
+    # RECENT / OLD → generate_answer
+    # NOT_FOUND    → wikipedia_search (safe: classify already confirmed sports)
+    builder.add_conditional_edges(
+        "check_recency",
+        manager.route_after_recency_check,
+        {
+            "generate_answer":  "generate_answer",
+            "wikipedia_search": "wikipedia_search",
+        },
+    )
 
     return builder.compile()
 
 
-# Singleton — import 1 lần, dùng lại
+# Singleton — import once, reuse
 _graph = None
 
+
 def get_graph():
+    """Get or create the compiled graph singleton."""
     global _graph
     if _graph is None:
         _graph = build_graph()

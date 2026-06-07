@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from dotenv import load_dotenv
 import os
 import logging
-import psycopg2
+import uuid  # <-- Added for generating unique IDs
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
@@ -32,44 +32,38 @@ class VectorStore:
             force=True,
         )
 
-    def _get_existing_urls(self) -> set[str]:
-        try:
-            dsn = self.db_url.replace("postgresql+psycopg://", "postgresql://")
-            conn = psycopg2.connect(dsn)
-            cur = conn.cursor()
-            cur.execute("SELECT DISTINCT cmetadata->>'url' FROM langchain_pg_embedding")
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-            return {row[0] for row in rows if row[0]}
-        except Exception as e:
-            logger.warning("Không kiểm tra được duplicate URL: %s", e)
-            return set()
+    # REMOVED _get_existing_urls() completely!
 
     def insert(self, documents: list[Document]) -> int:
         if not documents:
             logger.info("insert() nhận danh sách rỗng, skip.")
             return 0
 
-        existing_urls = self._get_existing_urls()
-        new_docs = [d for d in documents if d.metadata.get("url") not in existing_urls]
+        # 1. Generate a Deterministic UUID for every chunk
+        doc_ids = []
+        for doc in documents:
+            # Grab the URL and chunk index from the metadata you set in chunker.py
+            url = doc.metadata.get("url", "unknown_url")
+            chunk_idx = doc.metadata.get("chunk_index", 0)
+            
+            # Create a unique string signature for this exact piece of text
+            unique_signature = f"{url}_chunk_{chunk_idx}"
+            
+            # Hash it into a standard UUID format
+            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, unique_signature))
+            doc_ids.append(chunk_id)
 
-        if not new_docs:
-            logger.info(
-                "Tất cả %i docs đã tồn tại trong DB (theo URL), skip insert.",
-                len(documents),
-            )
-            return 0
-
-        print(
-            f"[DEBUG] insert() called with {len(new_docs)} new documents "
-            f"(lọc từ tổng {len(documents)})"
-        )
+        print(f"[DEBUG] insert() called with {len(documents)} documents")
+        
         try:
-            self.vector_store.add_documents(new_docs)
+            # 2. Pass the IDs to add_documents. 
+            # PGVector will now UPSERT automatically. No duplicates will be created.
+            self.vector_store.add_documents(documents, ids=doc_ids)
+            
             print("[DEBUG] add_documents completed")
-            logger.info("Đã lưu %i chunks mới vào PGVector.", len(new_docs))
-            return len(new_docs)
+            logger.info("Đã lưu/cập nhật %i chunks vào PGVector.", len(documents))
+            return len(documents)
+            
         except Exception as e:
             print(f"[DEBUG] EXCEPTION in insert: {type(e).__name__}: {e}")
             raise
@@ -77,15 +71,7 @@ class VectorStore:
     def query(
         self, question: str, k: int = 20, hours_ago: int | None = None
     ) -> list[Document]:
-        """
-        Query vector store.
-        - Luôn lấy pool lớn (mặc định 20) để có đủ candidate.
-        - Lọc unique theo URL.
-        - Nếu hours_ago được truyền, chỉ trả về bài trong khoảng thời gian đó,
-          sắp xếp mới nhất lên đầu.
-        - Nếu không có bài nào trong khung thời gian, trả về bài mới nhất có
-          liên quan và gắn flag 'recency_warning' vào metadata.
-        """
+        # ... (Keep your query function exactly the same as before)
         results = self.vector_store.similarity_search_with_score(question, k=k)
         filtered: list[Document] = []
 
@@ -116,7 +102,7 @@ class VectorStore:
             logger.info(
                 "Query '%s': tìm được %d docs (trả về %d unique).",
                 question[:50],
-                len(docs),
+                len(filtered),
                 len(unique_docs[:5]),
             )
             return unique_docs[:5]
