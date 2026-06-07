@@ -12,9 +12,9 @@ An LLM-powered chatbot that answers user queries about sports news by crawling, 
 
 - CLI chat interface: `src/chat.py` (basic interactive CLI)
 - RAG orchestration and update logic: `src/rag/rag_update_news.py`
-- Crawlers: `src/rag/crawler/news_crawler.py` and `src/rag/crawler/news_crawler_v2.py`
+- Crawlers: `src/rag/crawler/news_crawler_v2.py`
 - Data pipeline modules: `src/rag/news_pipeline/cleaner.py`, `chunker.py`, `vector_store.py`
-- Utilities: `src/util/tools.py` and legacy helpers in `tool_old.py`
+- Utilities: `src/util/tools.py`
 - Tests: `tests/test_hello.py`
 - Docker + postgres compose for a local vector DB (`docker-compose.yml`) and Dockerfile
 
@@ -93,13 +93,14 @@ Edit the `.env` file and add your API keys and DB URL:
 DB_NAME="vectordb"
 DB_URL="postgresql+psycopg://langchain:langchain@localhost:5432/vectordb"
 
-QWEN_API_KEY=your_actual_key_here
 NVIDIA_API_KEY=your_actual_key_here
 ```
 
 4. Install dependencies
 
 ```bash
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -115,9 +116,8 @@ Note: The current CLI will use the available local vector DB if it has been popu
 
 ## API Setup
 
-### Getting API Keys
+### Getting API Key(s)
 
-- **QWEN_API_KEY:** Get from Alibaba Cloud Qwen
 - **NVIDIA_API_KEY:** Get from NVIDIA API Catalog
 
 (Links and details are in the original README and in your internal notes.)
@@ -133,15 +133,13 @@ ai_sport_news_chatbot/
 │   ├── rag/
 │   │   ├── rag_update_news.py           # RAG update logic
 │   │   ├── crawler/
-│   │   │   ├── news_crawler.py          # News crawler v1
-│   │   │   └── news_crawler_v2.py       # News crawler v2
+│   │   │   └── news_crawler.py          # News crawler v1
 │   │   └── news_pipeline/
 │   │       ├── cleaner.py               # Data cleaning
 │   │       ├── chunker.py               # Text chunking
 │   │       └── vector_store.py          # Vector database operations
 │   └── util/
-│       ├── tools.py                     # Utility tools
-│       └── tool_old.py                  # Legacy tools
+│       └── tools.py                     # Utility tools
 ├── tests/
 │   └── test_hello.py                    # Test file
 ├── logs/                                # Application logs
